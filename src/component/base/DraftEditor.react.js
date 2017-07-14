@@ -43,7 +43,8 @@ const isIE = UserAgent.isBrowser('IE');
 
 // IE does not support the `input` event on contentEditable, so we can't
 // observe spellcheck behavior.
-const allowSpellCheck = !isIE;
+// IE11 does support MutationObserver which we can use instead of onInput.
+const allowSpellCheck = !isIE || MutationObserver;
 
 // Define a set of handler objects to correspond to each possible `mode`
 // of editor behavior.
@@ -85,6 +86,7 @@ class DraftEditor extends React.Component {
   _dragCount: number;
   _editorKey: string;
   _placeholderAccessibilityID: string;
+  _observer: MutationObserver;
 
   /**
    * Define proxies that can route events to the current handler.
@@ -303,6 +305,24 @@ class DraftEditor extends React.Component {
      */
     if (isIE) {
       document.execCommand('AutoUrlDetect', false, false);
+
+      /**
+       * Add a mutation observer to allow IE 11 to detect spellcheck changes.
+       * All other browsers can use native onInput events to detect these changes.
+       * Older IEs are not supported due to the poor performance characteristics
+       * of DOM mutation events.
+       */
+      if (MutationObserver) {
+        this._observer = new MutationObserver(() => this._onInput());
+        this._observer.observe(this.refs.editor, {characterData: true, subtree: true});
+      }
+    }
+  }
+
+  componentWillUnmount() {
+    if (this._observer) {
+      this._observer.disconnect();
+      this._observer = null;
     }
   }
 
